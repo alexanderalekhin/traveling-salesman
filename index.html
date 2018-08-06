@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Задача коммивояжёра</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=windows-1251"/>
+	 <script src="https://yandex.st/jquery/1.9.1/jquery.min.js" type="text/javascript"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+   
+ <script type="text/javascript">  
+ 
+	//массив координат пунктов посещения
+ var myMatrix_2=[];
+	//Массивы для хранения расстояний между городами в одном направлении и в обратном
+ var Matrix_distance0=[]; var Matrix_distance1=[];
+	//матрица расстояний
+ var Matrix_distance=new Array();
+	//счётчики
+var count=0; var count1=0;
+//Массив адресов
+var massive_adress=[];
+var posl=[];var posl1=[];
+var promiseArray = [];
+var promiseArray1 = [];
+var buf;var town;var street=''; var number='';
+
+      ymaps.ready(init);
+	
+	function init() {
+		
+		
+		// Создаем карту.
+		myMap = new ymaps.Map('map', {
+            center: [55.76, 37.64],
+            zoom: 9,
+            controls: []
+        });
+		
+		
+		
+
+		//Выбор пунктов посещения щелчками по карте
+		myMap.events.add('click', function(e) {
+			if (!myMap.balloon.isOpen()) {
+            var coords = e.get('coords');
+			myMatrix_2.push(coords[0].toPrecision(6));
+			buf=myMatrix_2.push(coords[1].toPrecision(6));
+			getAddress([myMatrix_2[buf-2],myMatrix_2[buf-1]]);
+            myMap.balloon.open(coords, {
+                contentBody:'<p>Координаты щелчка #' + buf/2+': '+[
+					coords[0].toPrecision(6),
+					coords[1].toPrecision(6)
+                    ].join(', ') + '</p>'
+               
+            });
+        }
+        else {
+            myMap.balloon.close();
+        }
+    });
+	// Определяем адрес по координатам (обратное геокодирование).
+	function getAddress(coords) {
+		ymaps.geocode(coords).then(function (res) {
+		var firstGeoObject = res.geoObjects.get(0);
+		// Название населенного пункта или вышестоящее административно-территориальное образование.
+		town=(firstGeoObject.getLocalities().length) ? firstGeoObject.getLocalities() : firstGeoObject.getAdministrativeAreas();
+		// Получаем путь до топонима, если метод вернул null, запрашиваем наименование здания.
+		if(firstGeoObject.getThoroughfare()!=null || firstGeoObject.getPremise()!=null){
+		street=firstGeoObject.getThoroughfare() || firstGeoObject.getPremise()
+		}
+		else{street='';}
+		if(firstGeoObject.getPremiseNumber()!=null){
+		number=firstGeoObject.getPremiseNumber();
+		}
+		else{number=''}
+		massive_adress.push(town+','+street+','+number+';');
+		});
+	};	
+		
+	
+	alert("Выбирайте пункты посещения, нажимая по карте");	
+};
+	//создадим массивы расстояний между пунктами
+function create_mass_distance(){
+	for(var i=0; i<myMatrix_2.length; i=i+2){
+		for(var j=i+2; j<myMatrix_2.length; j=j+2,count++){
+	    
+	    var coordinate = [[myMatrix_2[i],myMatrix_2[i+1]],[myMatrix_2[j],myMatrix_2[j+1]]];
+	    
+	    // пришлось делать замыкание
+	    // потому что иначе count не запоминается
+	    var func = (function() {
+		var defer = new $.Deferred();
+		promiseArray.push(defer.promise());
+
+		var myCount = count; // сохраняем в замыкании ID элемента
+		var myCoordinate = coordinate; // сохраняем в замыкании координаты
+		ymaps.route(myCoordinate).then(
+		    function (route) {
+			Matrix_distance0.push(route.getLength());
+			posl.push(myCount);
+			// "завершаем" promise-object
+			promiseArray[myCount].resolve();
+			
+		    },
+		    function (error) {
+			promiseArray[myCount].reject();
+			alert('Возникла ошибка: ' + error.message);
+		    }
+		); //ymaps.route
+	    }); //func
+	    func();
+	} //for
+  }//for
+  for(var k=0; k<myMatrix_2.length; k=k+2){
+		for(var t=k+2; t<myMatrix_2.length; t=t+2,count1++){
+	    
+	    var coordinate1 = [[myMatrix_2[t],myMatrix_2[t+1]],[myMatrix_2[k],myMatrix_2[k+1]]];
+	    
+	     
+	    var func1 = (function() {
+		var defer1 = new $.Deferred();
+		promiseArray1.push(defer1.promise());
+
+		var myCount1 = count1; 
+		var myCoordinate1 = coordinate1; 
+		ymaps.route(myCoordinate1).then(
+		    function (route) {
+			Matrix_distance1.push(route.getLength());
+			posl1.push(myCount1);
+			promiseArray1[myCount1].resolve();
+			
+		    },
+		    function (error) {
+			promiseArray1[myCount1].reject();
+			alert('Р’РѕР·РЅРёРєР»Р° РѕС€РёР±РєР°: ' + error.message);
+		    }
+		); //ymaps.route
+	    }); //func1
+	    func1();
+	} //for
+  }//for
+  alert("Нажмите кнопку <<Создать матрицу расстояний>>");
+};
+
+//Функция сортировки длин маршрутов в порядке выбора пунктов посещения (так как функция построения маршрутов ymaps.route асинхронна)
+function sortirovka(){
+
+	var prr = {};
+	for (var i = 0; i < Matrix_distance0.length; i++) {
+		prr[Matrix_distance0[i]] = posl[i]
+	};
+	Matrix_distance0.sort(function(a, b) {
+		return prr[a]-prr[b]  
+	});
+	posl.sort(function(a, b) {
+		return a-b
+	});
+	var prr1 = {};
+	for (var j = 0; j < Matrix_distance1.length; j++) {
+		prr1[Matrix_distance1[j]] = posl1[j]
+	};
+	Matrix_distance1.sort(function(c, d) {
+		return prr1[c]-prr1[d]  
+	});
+	posl1.sort(function(c, d) {
+		return c-d
+	});
+
+};
+
+function create_matr_distance(){
+	sortirovka();
+	//Создадим матрицу для расстояний между пунктами посещения
+	Matrix_distance = new Array();
+	var count=0;var count1=0;
+	for(var i=0; i<(myMatrix_2.length/2); i++){
+		Matrix_distance[i] = new Array();
+	}
+	for(var i=0; i<(myMatrix_2.length/2); i++){
+		for(var j=0; j<(myMatrix_2.length/2); j++){
+			if(i===j){
+			Matrix_distance[i][j] = 0;
+			}
+			else {
+				if(i<j){
+					Matrix_distance[i][j]=Matrix_distance0[count];
+					count++;}
+				else {
+					Matrix_distance[i][j]=Matrix_distance1[count1];
+					count1++;}
+			}
+		};
+	};
+	alert("Нажмите кнопку <<Решить>>");
+	//cout_matr(Matrix_distance);
+};
+
+
+
+		
+	
+	//Вывод матрицы
+	function cout_matr(A){
+		for(var i=0;i<A.length;i++){
+			for(var j=0;j<A[i].length;j++){
+					document.write(A[i][j]+' ');
+			}
+			document.write("<br/>");
+		}
+	};
+	
+	function sendMatrix(){
+		document.getElementById("IdMatrix").value = Matrix_distance;
+		document.getElementById("IdAdresss").value=massive_adress;
+	};
+		
+</script>
+   
+   
+    <style>
+        html,body,#map {
+            width: 100%;
+            height: 90%;
+           
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+	<input type="button"  onclick=create_mass_distance() value="Отметок достаточно"/>
+	<input type="button"  onclick=create_matr_distance() value="Создать матрицу расстояний"/>
+	<form action = "/cgi-bin/Kursach.exe" method = "post">
+		
+	   <input type="hidden" id="IdMatrix" name="matrix" value=Matrix_distance>
+	   <input type="hidden" id="IdAdresss" name="adress" value=massive_adress>
+		<button onClick=sendMatrix() name="solve" type="submit">Решить</button>
+   </form>
+	
+	
+</body>
+
+</html>
